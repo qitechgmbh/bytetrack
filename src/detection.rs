@@ -19,6 +19,6 @@ impl Detection {
 #[macro_export]
 macro_rules! det {
     ($point:expr, $conf:expr) => {
-        Detection::new($point, $conf)
+        $crate::detection::Detection::new($point, $conf)
     };
 }

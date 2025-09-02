@@ -1,7 +1,8 @@
 [package]
 name = "bytetrack"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
+readme = "README.md"
 
 [dependencies]
 nalgebra = "0.34"

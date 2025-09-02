@@ -1,5 +1,14 @@
+/// Assignment algorithms for matching tracks to detections
+///
+/// This enum defines different algorithms that can be used to solve the assignment
+/// problem in multi-object tracking, where we need to match existing tracks to
+/// new detections optimally.
 #[derive(Debug, Clone)]
 pub enum MatchingAlgorithm {
+    /// Hungarian algorithm (Kuhn-Munkres) for optimal assignment
+    ///
+    /// The scale_factor is used to convert floating-point IoU values to integers
+    /// for the integer-based Hungarian algorithm implementation.
     Hungarian { scale_factor: f32 },
     // Greedy,
 }
@@ -30,6 +39,9 @@ impl MatchingAlgorithm {
     ///
     /// # Example
     /// ```rust
+    /// use bytetrack::matching::MatchingAlgorithm;
+    ///
+    /// let matcher = MatchingAlgorithm::default();
     /// let iou_matrix = vec![
     ///     vec![0.8, 0.2],  // Track 0: high IoU with detection 0, low with detection 1
     ///     vec![0.1, 0.9],  // Track 1: low IoU with detection 0, high with detection 1
@@ -37,18 +49,7 @@ impl MatchingAlgorithm {
     /// let assignments = matcher.solve_assignment(&iou_matrix, 0.5);
     /// // Expected result: [Some(0), Some(1)]
     /// // Track 0 → Detection 0, Track 1 → Detection 1
-    ///
-    /// // Usage in tracking loop:
-    /// for (track_idx, assignment) in assignments.iter().enumerate() {
-    ///     match assignment {
-    ///         Some(det_idx) => {
-    ///             tracks[track_idx].update(&detections[*det_idx]);
-    ///         }
-    ///         None => {
-    ///             tracks[track_idx].mark_lost();
-    ///         }
-    ///     }
-    /// }
+    /// assert_eq!(assignments, vec![Some(0), Some(1)]);
     /// ```
     ///
     /// # Notes
@@ -128,11 +129,13 @@ impl MatchingAlgorithm {
     }
 }
 
+/// Convert IoU to cost (1.0 - IoU) for minimization algorithms
 #[inline]
 fn cost(iou: f32) -> f32 {
     1.0 - iou
 }
 
+/// Scale floating-point cost to integer for Hungarian algorithm
 #[inline]
 fn scale(value: f32, scale_factor: f32) -> i32 {
     (value * scale_factor).round() as i32

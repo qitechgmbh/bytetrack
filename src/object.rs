@@ -6,13 +6,20 @@ use crate::{
     kalman::{BBoxKalmanConfig, BBoxKalmanFilter},
 };
 
+/// Status of a tracked object
+///
+/// Objects can be either actively tracked (when recently matched to detections)
+/// or temporarily lost (when no matching detection was found for some frames).
 #[derive(Clone, Debug)]
 pub enum ObjectStatus {
+    /// Object is actively being tracked
     Tracked,
+    /// Object is temporarily lost for the specified number of frames
     Lost { frames: u32 },
 }
 
 impl ObjectStatus {
+    /// Increment the number of lost frames or transition from Tracked to Lost
     pub fn incrment_lost_frames(&mut self) {
         match self {
             ObjectStatus::Tracked => {
@@ -24,6 +31,9 @@ impl ObjectStatus {
         }
     }
 
+    /// Get the number of frames this object has been lost
+    ///
+    /// Returns 0 if the object is currently tracked.
     pub fn get_lost_frames(&self) -> u32 {
         match self {
             ObjectStatus::Tracked => 0,
@@ -31,23 +41,28 @@ impl ObjectStatus {
         }
     }
 
+    /// Reset status to Tracked
     pub fn reset(&mut self) {
         *self = ObjectStatus::Tracked;
     }
 }
 
+/// A tracked object with Kalman filter-based prediction
+///
+/// This represents an object being tracked across multiple frames. It maintains
+/// the latest detection information, predicted bounding box from Kalman filtering,
+/// tracking status, and optional point features.
 pub struct Object {
-    /// Detection that was last given to the tracker via [`Bytetrack::track`]
+    /// Detection that was last given to the tracker via `Bytetrack::track`
     pub detection: Detection,
-    /// Index of the last detection when given to the [`Bytetrack::track`] method
+    /// Index of the last detection when given to the `Bytetrack::track` method
     pub detection_index: Option<usize>,
     /// Bounding box updated by Kalman filter
     pub bbox: BBox,
-    /// Tracked points
+    /// Tracked points (for future feature tracking extensions)
     pub points: Vec<Point2<f32>>,
-    /// Status of the track
+    /// Status of the track (Tracked or Lost with frame count)
     pub status: ObjectStatus,
-    /// lost frames
     /// Kalman filter for predicting bbox position and size
     kalman_filter: BBoxKalmanFilter,
 }
@@ -65,6 +80,10 @@ impl Clone for Object {
 }
 
 impl Object {
+    /// Create a new Object from a detection with default Kalman filter configuration
+    ///
+    /// # Arguments
+    /// * `detection` - Initial detection to create the object from
     pub fn from_detection(detection: Detection) -> Self {
         // Create Kalman filter with default configuration
         let config = BBoxKalmanConfig::default();
@@ -80,6 +99,11 @@ impl Object {
         }
     }
 
+    /// Create a new Object with custom Kalman filter configuration
+    ///
+    /// # Arguments
+    /// * `detection` - Initial detection to create the object from
+    /// * `config` - Custom Kalman filter configuration
     pub fn new_with_config(detection: Detection, config: BBoxKalmanConfig) -> Self {
         // Create Kalman filter with custom configuration
         let kalman_filter = BBoxKalmanFilter::new(&detection.bbox, config).unwrap();
@@ -94,6 +118,13 @@ impl Object {
         }
     }
 
+    /// Predict the next bounding box position using Kalman filter
+    ///
+    /// This should be called once per frame to get the predicted location
+    /// of the object before attempting to match it with new detections.
+    ///
+    /// # Returns
+    /// Predicted bounding box for the next frame
     pub fn predict(&mut self) -> BBox {
         // Perform Kalman filter prediction and get predicted bbox
         let predicted_bbox = self.kalman_filter.predict();
@@ -101,6 +132,16 @@ impl Object {
         predicted_bbox
     }
 
+    /// Update the object with a new matching detection
+    ///
+    /// This updates the Kalman filter with the new detection and resets
+    /// the object status to Tracked.
+    ///
+    /// # Arguments
+    /// * `detection` - New detection that matches this object
+    ///
+    /// # Returns
+    /// Result indicating success or Kalman filter error
     pub fn update(&mut self, detection: Detection) -> Result<(), Box<dyn std::error::Error>> {
         // Update Kalman filter with new detection
         self.kalman_filter.update(&detection.bbox)?;

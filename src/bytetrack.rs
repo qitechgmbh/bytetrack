@@ -7,31 +7,52 @@ use crate::{
     object::Object,
 };
 
+/// Main ByteTrack tracker implementation
+///
+/// ByteTrack is a multi-object tracking algorithm that associates detections with
+/// existing tracks using a two-stage approach:
+/// 1. High-confidence detections are matched to existing tracks using IoU
+/// 2. Low-confidence detections are used to recover potentially lost tracks
+///
+/// The tracker maintains objects with unique IDs and uses Kalman filtering
+/// for motion prediction between frames.
+///
+/// # Type Parameters
+/// * `ID` - Type used for unique object identifiers (must be hashable and cloneable)
 pub struct Bytetrack<ID>
 where
     ID: Eq + std::hash::Hash + Clone,
 {
+    /// Map of tracked objects indexed by their unique IDs
     objects: HashMap<ID, Object>,
+    /// Configuration parameters for the tracker
     config: BytetrackConfig<ID>,
-    /// last used ID
+    /// Last used ID for generating new object IDs
     last_id: Option<ID>,
 }
 
+/// Configuration parameters for ByteTrack
+///
+/// This struct contains all the tunable parameters that control the behavior
+/// of the ByteTrack algorithm.
+///
+/// # Type Parameters
+/// * `ID` - Type used for unique object identifiers
 pub struct BytetrackConfig<ID>
 where
     ID: Eq + std::hash::Hash + Clone,
 {
-    // Maximum number of frames an object can be missing before it is removed
+    /// Maximum number of frames an object can be missing before it is removed
     max_disappeared: u32,
-    /// Maximum distance between two objects to be considered the same
+    /// Minimum IoU threshold for accepting a track-detection match
     min_iou: f32,
-    /// High detection confidence threshold
+    /// High detection confidence threshold (for primary matching stage)
     high_thresh: f32,
-    /// Low detection confidence threshold
+    /// Low detection confidence threshold (for recovery matching stage)
     low_thresh: f32,
-    /// Algorithm to use for matching
+    /// Algorithm to use for solving the assignment problem
     algorithm: MatchingAlgorithm,
-    /// new object ID generator
+    /// Function to generate new object IDs
     generate_id: Box<dyn Fn(Option<&ID>) -> ID>,
 }
 
@@ -52,6 +73,10 @@ impl<ID> Bytetrack<ID>
 where
     ID: Eq + std::hash::Hash + Clone,
 {
+    /// Create a new ByteTrack tracker with the given configuration
+    ///
+    /// # Arguments
+    /// * `config` - Configuration parameters for the tracker
     pub fn new(config: BytetrackConfig<ID>) -> Self {
         Bytetrack {
             objects: HashMap::new(),
@@ -60,6 +85,16 @@ where
         }
     }
 
+    /// Track objects in the current frame
+    ///
+    /// This is the main entry point for the tracking algorithm. It processes
+    /// the provided detections and updates the internal state of tracked objects.
+    ///
+    /// # Arguments
+    /// * `detections` - Slice of detections from the current frame
+    ///
+    /// # Type Parameters
+    /// * `DETECTION` - Type that can be converted to Detection (via `AsRef<Detection>`)
     pub fn track<DETECTION>(&mut self, detections: &[DETECTION]) -> ()
     where
         DETECTION: AsRef<Detection>,
@@ -183,7 +218,18 @@ where
 
 /// Split detections into high and low confidence based on thresholds
 ///
-/// Returns two vectors containing the original index and the detection
+/// This function categorizes detections into two groups based on confidence scores:
+/// - High confidence: Used for primary track-detection matching
+/// - Low confidence: Used for recovering potentially lost tracks
+///
+/// # Arguments
+/// * `detections` - Slice of detection references to categorize
+/// * `high_thresh` - Minimum confidence for high-confidence group
+/// * `low_thresh` - Minimum confidence for low-confidence group
+///
+/// # Returns
+/// Tuple of (high_confidence_detections, low_confidence_detections) where each
+/// vector contains (original_index, cloned_detection) pairs
 fn split_detections(
     detections: &[&Detection],
     high_thresh: f32,

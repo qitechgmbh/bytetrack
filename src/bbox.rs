@@ -1,12 +1,24 @@
 use nalgebra::{Point2, Translation2};
 
+/// A 2D bounding box representation using origin point and translation vector
+///
+/// The bounding box is defined by its top-left corner (origin) and dimensions (translation).
+/// This representation allows for efficient geometric operations and IoU calculations.
 #[derive(Clone, Debug)]
 pub struct BBox {
+    /// Top-left corner of the bounding box
     pub origin: Point2<f32>,
+    /// Translation vector representing width (x) and height (y)
     pub translation: Translation2<f32>, // width = x, height = y
 }
 
 impl BBox {
+    /// Create a new bounding box from origin point and dimensions
+    ///
+    /// # Arguments
+    /// * `origin` - Top-left corner point
+    /// * `width` - Width of the bounding box
+    /// * `height` - Height of the bounding box
     pub fn new(origin: Point2<f32>, width: f32, height: f32) -> Self {
         BBox {
             origin,
@@ -36,26 +48,41 @@ impl BBox {
         Self::from_xywh(x, y, w, h)
     }
 
+    /// Get the width of the bounding box
     #[inline]
     fn width(&self) -> f32 {
         self.translation.vector.x.clone()
     }
 
+    /// Get the height of the bounding box
     #[inline]
     fn height(&self) -> f32 {
         self.translation.vector.y.clone()
     }
 
+    /// Get the x-coordinate of the right edge
     #[inline]
     fn right(&self) -> f32 {
         self.origin.x.clone() + self.width()
     }
 
+    /// Get the y-coordinate of the bottom edge
     #[inline]
     fn bottom(&self) -> f32 {
         self.origin.y.clone() + self.height()
     }
 
+    /// Calculate Intersection over Union (IoU) with another bounding box
+    ///
+    /// IoU is a measure of overlap between two bounding boxes, ranging from 0 (no overlap)
+    /// to 1 (perfect overlap). It's calculated as the area of intersection divided by
+    /// the area of union.
+    ///
+    /// # Arguments
+    /// * `other` - The other bounding box to compare with
+    ///
+    /// # Returns
+    /// IoU value between 0.0 and 1.0
     pub fn iou(&self, other: &BBox) -> f32 {
         // Intersection rectangle extents
         let inter_left = self.origin.x.clone().max(other.origin.x.clone());
@@ -83,6 +110,10 @@ impl BBox {
         inter_area / union
     }
 
+    /// Get the center point of the bounding box
+    ///
+    /// # Returns
+    /// Center point as (x, y) coordinates
     #[inline]
     pub fn center(&self) -> Point2<f32> {
         Point2::<f32>::new(
@@ -91,6 +122,12 @@ impl BBox {
         )
     }
 
+    /// Calculate the diagonal length of the bounding box
+    ///
+    /// This can be useful for normalization or distance calculations.
+    ///
+    /// # Returns
+    /// Length of the diagonal from top-left to bottom-right
     #[inline]
     pub fn diagonal(&self) -> f32 {
         self.translation.vector.norm()
@@ -131,7 +168,13 @@ mod tests {
     }
 }
 
-/// Calls [`Rect::from_xyxy`]
+/// Convenience macro for creating a bounding box from (x1, y1, x2, y2) coordinates
+///
+/// # Example
+/// ```rust
+/// use bytetrack::bbox_xyxy;
+/// let bbox = bbox_xyxy!(10.0, 20.0, 30.0, 40.0);
+/// ```
 #[macro_export]
 macro_rules! bbox_xyxy {
     ($x1:expr, $y1:expr, $x2:expr, $y2:expr) => {
@@ -139,7 +182,13 @@ macro_rules! bbox_xyxy {
     };
 }
 
-/// Calls [`Rect::from_xywh`]
+/// Convenience macro for creating a bounding box from (x, y, width, height)
+///
+/// # Example
+/// ```rust
+/// use bytetrack::bbox;
+/// let bbox = bbox!(10.0, 20.0, 30.0, 40.0);
+/// ```
 #[macro_export]
 macro_rules! bbox {
     ($x:expr, $y:expr, $w:expr, $h:expr) => {
