@@ -7,6 +7,18 @@ edition = "2024"
 name = "mot17_plotting"
 path = "examples/mot17_plotting.rs"
 
+[[example]]
+name = "basic_tracking"
+path = "examples/basic_tracking.rs"
+
+[[example]]
+name = "kalman_debug"
+path = "examples/kalman_debug.rs"
+
+[[example]]
+name = "debug_matrices"
+path = "examples/debug_matrices.rs"
+
 [dependencies]
 anyhow = "1.0.99"
 polars = { version = "0.45.0", features = ["csv"] }

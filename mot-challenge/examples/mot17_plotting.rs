@@ -30,7 +30,7 @@ fn main() -> Result<()> {
 
     // Initialize ByteTrack with default configuration
     let mut tracker = Bytetrack::new(BytetrackConfig::<u32> {
-        max_disappeared: 10,
+        max_disappeared: 15,
         ..default::Default::default()
     });
 
@@ -39,7 +39,7 @@ fn main() -> Result<()> {
 
     // Process each frame
     let mut last_i = 0;
-    for (i, frame) in sequence.frames.iter().take(100).enumerate() {
+    for (i, frame) in sequence.frames.iter().enumerate() {
         // Convert detections to ByteTrack format
         let detections: Vec<bytetrack::Detection> = frame
             .detections
@@ -90,7 +90,9 @@ fn main() -> Result<()> {
 
 /// Create a plot visualization of all tracked object trajectories
 fn create_tracking_plot(track_trajectories: &HashMap<u32, Vec<(f32, f32, usize)>>) -> Result<()> {
-    let root = BitMapBackend::new("mot17_plotting.png", (1280, 720)).into_drawing_area();
+    // make sure assets directory exists
+    std::fs::create_dir_all("assets")?;
+    let root = BitMapBackend::new("assets/mot17_plotting.png", (1280, 720)).into_drawing_area();
     root.fill(&WHITE)?;
 
     // Find the bounds of all trajectories
