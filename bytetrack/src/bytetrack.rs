@@ -99,7 +99,7 @@ where
     /// # Result
     /// * New objects will eb added to [`Self::objects`]
     /// * Updated objects will have their state modified inside [`Self::objects`]
-    /// * The [`BytetrackTrackResult`] bill be returned
+    /// * The [`BytetrackTrackResult`] will be returned
     ///   * The [`BytetrackTrackResult::new`] field contains IDs of newly created objects
     ///   * The [`BytetrackTrackResult::updated`] field contains IDs of updated objects
     ///   * The [`BytetrackTrackResult::removed`] field contains the removed objects
@@ -115,7 +115,7 @@ where
             split_detections(detections, self.config.high_thresh, self.config.low_thresh);
 
         // 2. Match high confidence detections to existing objects
-        // 2.1 Build cost matrix (e.g. using IoU)
+        // 2.1 Build iou matrix 
         let high_conf_bboxes: Vec<BBox> = high_conf_detections
             .iter()
             .map(|(_, d)| d.bbox.clone())
@@ -128,7 +128,6 @@ where
         );
 
         // 2.2 Solve assignment problem (e.g. using Hungarian algorithm)
-        // Vec<Option<usize>> Track-to-detection mapping so usize is a detection index
         let assignments = self
             .config
             .algorithm
@@ -158,8 +157,8 @@ where
                 },
             );
 
-        // 4. Match low confidence detections to unmatched objects
-        // 4.1 Build cost matrix (e.g. using IoU)
+        // 3. Match low confidence detections to unmatched objects
+        // 3.1 Build iou matrix
         let unmatched_predicted_bboxes: Vec<&BBox> = predicted_bboxes
             .iter()
             .enumerate()
@@ -174,13 +173,13 @@ where
             low_conf_bboxes.as_slice(),
         );
 
-        // 4.2 Solve assignment problem (e.g. using Hungarian algorithm)
+        // 3.2 Solve assignment problem (e.g. using Hungarian algorithm)
         let assignments = self
             .config
             .algorithm
             .solve_assignment(&iou_matrix, self.config.min_iou);
 
-        // 4.3  Update matched objects with new detections
+        // 3.3  Update matched objects with new detections
         let mut new_found_objects = Vec::new();
         self.objects
             .iter_mut()
@@ -202,14 +201,14 @@ where
             });
         found_objects.extend(new_found_objects);
 
-        // 5. Increment disappeared counter for unmatched objects
+        // 4. Increment disappeared counter for unmatched objects
         self.objects
             .iter_mut()
             .enumerate()
             .filter(|(i, _)| !found_objects.contains(i))
             .for_each(|(_i, (_id, object))| object.status.incrment_lost_frames());
 
-        // 6. Remove objects that have disappeared for too long
+        // 5. Remove objects that have disappeared for too long
         let mut removed_objects = Vec::new();
         self.objects.retain(|_id, obj| {
             match obj.status.get_lost_frames() <= self.config.max_disappeared {
@@ -221,7 +220,7 @@ where
             }
         });
 
-        // 7. Create new objects for unmatched detections
+        // 6. Create new objects for unmatched detections
         let mut new_objects: Vec<(usize, ID)> = Vec::new();
         detections
             .iter()

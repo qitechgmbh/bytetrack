@@ -35,7 +35,7 @@ where
         // Recreate the Kalman filter since it doesn't implement Clone
         let kalman_filter = if let Some(latest_detection) = self.track.last() {
             let config = BBoxKalmanConfig::default();
-            BBoxKalmanFilter::new(&latest_detection.detection.bbox, config).unwrap()
+            BBoxKalmanFilter::new(&latest_detection.bbox, config).unwrap()
         } else {
             unreachable!("Object must have at least one tracked detection to clone")
         };
@@ -70,7 +70,12 @@ where
         let config = BBoxKalmanConfig::default();
         let kalman_filter = BBoxKalmanFilter::new(&detection.bbox, config).unwrap();
 
-        let tracked_detection = TrackedDetection::new(detection, detection_index, frame_index);
+        let tracked_detection = TrackedDetection::new(
+            Some(detection),
+            Some(detection_index),
+            detection.bbox.clone(),
+            frame_index,
+        );
 
         Self {
             id,
@@ -98,7 +103,12 @@ where
         // Create Kalman filter with custom configuration
         let kalman_filter = BBoxKalmanFilter::new(&detection.bbox, config).unwrap();
 
-        let tracked_detection = TrackedDetection::new(detection, detection_index, frame_index);
+        let tracked_detection = TrackedDetection::new(
+            Some(detection),
+            Some(detection_index),
+            detection.bbox.clone(),
+            frame_index,
+        );
 
         Self {
             id,
@@ -150,7 +160,12 @@ where
         self.kalman_filter.update(&detection.bbox)?;
 
         // Add new tracked detection to the track history
-        let tracked_detection = TrackedDetection::new(detection, detection_index, frame_index);
+        let tracked_detection = TrackedDetection::new(
+            Some(detection),
+            Some(detection_index),
+            detection.bbox.clone(),
+            frame_index,
+        );
         self.track.push(tracked_detection);
 
         // Update status to tracked
@@ -169,13 +184,35 @@ where
         }
     }
 
-    /// Get the latest detection
-    pub fn latest_detection(&self) -> Option<&Detection> {
-        self.track.last().map(|td| &td.detection)
+    /// Get the latest [TrackedDetection]
+    pub fn last_tracked_detection(&self) -> &TrackedDetection {
+        self.track
+            .last()
+            .expect("Object must have at least one detection that is Some")
     }
 
-    /// Get the latest detection index
-    pub fn latest_detection_index(&self) -> Option<usize> {
-        self.track.last().map(|td| td.detection_index)
+    /// Get the index of the last seen [Detection]
+    pub fn last_seen_index(&self) -> Option<usize> {
+        // iterate in reverse and find the last where Detection is SOme
+        self.track.iter().rev().find_map(|td| td.detection_index)
+    }
+
+    /// Get the last seen [Detection]
+    pub fn last_seen_detection(&self) -> Detection {
+        // iterate in reverse and find the last where Detection is SOme
+        self.track
+            .iter()
+            .rev()
+            .find_map(|td| td.detection.clone())
+            .expect("Object must have at least one detection that is Some")
+    }
+
+    /// Get the [TrackedDetection] where the detection was last seen
+    pub fn last_seen_tracked_detection(&self) -> &TrackedDetection {
+        self.track
+            .iter()
+            .rev()
+            .find(|td| td.detection.is_some())
+            .expect("Object must have at least one detection that is Some")
     }
 }

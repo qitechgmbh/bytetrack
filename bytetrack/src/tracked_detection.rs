@@ -3,9 +3,9 @@ use crate::{BBox, Detection};
 #[derive(Clone)]
 pub struct TrackedDetection {
     // Detection in the frame
-    pub detection: Detection,
+    pub detection: Option<Detection>,
     // The index of the detection in the detections array passed to the [`Bytetrack::track`] method
-    pub detection_index: usize,
+    pub detection_index: Option<usize>,
     // Kalman predicted bounding box in the frame
     pub bbox: BBox,
     // Frame index
@@ -13,11 +13,16 @@ pub struct TrackedDetection {
 }
 
 impl TrackedDetection {
-    pub fn new(detection: &Detection, detection_index: usize, frame_index: usize) -> Self {
+    pub fn new(
+        detection: Option<&Detection>,
+        detection_index: Option<usize>,
+        bbox: BBox,
+        frame_index: usize,
+    ) -> Self {
         Self {
-            detection: detection.clone(),
+            detection: detection.map(|x| x.clone()),
             detection_index,
-            bbox: detection.bbox.clone(),
+            bbox,
             frame_index,
         }
     }
