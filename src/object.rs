@@ -41,8 +41,8 @@ impl ObjectStatus {
         }
     }
 
-    /// Reset status to Tracked
-    pub fn reset(&mut self) {
+    /// Set status to Tracked
+    pub fn set_tracked(&mut self) {
         *self = ObjectStatus::Tracked;
     }
 }
@@ -151,7 +151,7 @@ impl Object {
         self.bbox = self.kalman_filter.current_bbox();
 
         // update status
-        self.status = ObjectStatus::Tracked;
+        self.status.set_tracked();
 
         Ok(())
     }
