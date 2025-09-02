@@ -91,21 +91,15 @@ where
     /// the provided detections and updates the internal state of tracked objects.
     ///
     /// # Arguments
-    /// * `detections` - Slice of detections from the current frame
-    ///
-    /// # Type Parameters
-    /// * `DETECTION` - Type that can be converted to Detection (via `AsRef<Detection>`)
-    pub fn track<DETECTION>(&mut self, detections: &[DETECTION]) -> ()
-    where
-        DETECTION: AsRef<Detection>,
+    /// * `detections` - Slice of detection references from the current frame
+    pub fn track(&mut self, detections: &[&Detection]) -> ()
     {
         // Predict new locations of existing objects
         let predicted_bboxes: Vec<_> = self.objects.iter_mut().map(|obj| obj.1.predict()).collect();
 
         // Split detections into high and low confidence
-        let detection_refs: Vec<&Detection> = detections.iter().map(|d| d.as_ref()).collect();
         let (high_conf_detections, low_conf_detections) = split_detections(
-            &detection_refs,
+            detections,
             self.config.high_thresh,
             self.config.low_thresh,
         );
@@ -209,10 +203,29 @@ where
             .filter(|(i, _)| !found_detections.contains(i))
             .for_each(|(_i, detection)| {
                 let new_id = (self.config.generate_id)(self.last_id.as_ref());
-                let new_object = Object::from_detection(detection.as_ref().clone());
+                let new_object = Object::from_detection((*detection).clone());
                 self.last_id = Some(new_id.clone());
                 self.objects.insert(new_id, new_object);
             });
+    }
+
+    /// Get a reference to all currently tracked objects
+    ///
+    /// Returns an iterator over (object_id, object) pairs for all
+    /// objects currently being tracked.
+    pub fn objects(&self) -> impl Iterator<Item = (&ID, &Object)> {
+        self.objects.iter()
+    }
+
+    /// Get the current bounding box for an object by ID
+    ///
+    /// # Arguments
+    /// * `object_id` - The ID of the object to retrieve
+    ///
+    /// # Returns
+    /// Option containing the object's current bounding box if found
+    pub fn get_object_bbox(&self, object_id: &ID) -> Option<&BBox> {
+        self.objects.get(object_id).map(|obj| &obj.bbox)
     }
 }
 
