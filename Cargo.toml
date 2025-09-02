@@ -1,10 +1,3 @@
-[package]
-name = "bytetrack"
-version = "0.1.0"
-edition = "2024"
-readme = "README.md"
-
-[dependencies]
-nalgebra = "0.34"
-pathfinding = "4.14.0"
-kalman_filters = { version = "1.0.0", features = ["nalgebra"] }
+[workspace]
+members = ["bytetrack"]
+resolver = "2"
