@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use crate::{
     bbox::{BBox, build_iou_matrix},
@@ -40,22 +41,23 @@ where
 ///
 /// # Type Parameters
 /// * `ID` - Type used for unique object identifiers
+#[derive(Clone)]
 pub struct BytetrackConfig<ID>
 where
     ID: Eq + std::hash::Hash + Clone,
 {
     /// Maximum number of frames an object can be missing before it is removed
-    max_disappeared: u32,
+    pub max_disappeared: u32,
     /// Minimum IoU threshold for accepting a track-detection match
-    min_iou: f32,
+    pub min_iou: f32,
     /// High detection confidence threshold (for primary matching stage)
-    high_thresh: f32,
+    pub high_thresh: f32,
     /// Low detection confidence threshold (for recovery matching stage)
-    low_thresh: f32,
+    pub low_thresh: f32,
     /// Algorithm to use for solving the assignment problem
-    algorithm: MatchingAlgorithm,
+    pub algorithm: MatchingAlgorithm,
     /// Function to generate new object IDs
-    generate_id: Box<dyn Fn(Option<&ID>) -> ID>,
+    pub generate_id: Arc<dyn Fn(Option<&ID>) -> ID + Send + Sync>,
 }
 
 impl Default for BytetrackConfig<u32> {
@@ -66,7 +68,7 @@ impl Default for BytetrackConfig<u32> {
             high_thresh: 0.6,
             low_thresh: 0.3,
             algorithm: MatchingAlgorithm::default(),
-            generate_id: Box::new(|last_id| last_id.map_or(0, |id| id + 1)),
+            generate_id: Arc::new(|last_id| last_id.map_or(0, |id| id + 1)),
         }
     }
 }
