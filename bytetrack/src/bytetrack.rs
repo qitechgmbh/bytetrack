@@ -117,7 +117,7 @@ where
             split_detections(detections, self.config.high_thresh, self.config.low_thresh);
 
         // 2. Match high confidence detections to existing objects
-        // 2.1 Build iou matrix 
+        // 2.1 Build iou matrix
         let high_conf_bboxes: Vec<BBox> = high_conf_detections
             .iter()
             .map(|(_, d)| d.bbox.clone())
@@ -270,6 +270,36 @@ where
     /// Option containing the object's current bounding box if found
     pub fn get_object_bbox(&self, object_id: &ID) -> Option<BBox> {
         self.objects.get(object_id).map(|obj| obj.current_bbox())
+    }
+
+    /// Remove and return all currently tracked objects
+    pub fn drain_objects(&mut self) -> Vec<Object<ID>> {
+        self.objects.drain().map(|(_id, obj)| obj).collect()
+    }
+
+    /// Get all currently tracked objects
+    pub fn get_objects(&self) -> Vec<&Object<ID>> {
+        self.objects.values().collect()
+    }
+
+    /// Get last frame index
+    pub fn last_frame_index(&self) -> usize {
+        self.last_frame_index
+    }
+
+    /// Get last used ID
+    pub fn last_id(&self) -> Option<&ID> {
+        self.last_id.as_ref()
+    }
+
+    /// Get configuration
+    pub fn config(&self) -> &BytetrackConfig<ID> {
+        &self.config
+    }
+
+    /// Set configuration
+    pub fn set_config(&mut self, config: &BytetrackConfig<ID>) {
+        self.config = config.clone();
     }
 }
 
