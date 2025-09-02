@@ -149,19 +149,13 @@ macro_rules! bbox {
 
 /// Build iou matrix based on IoU between objects and detections
 ///
-/// `row_bboxes` - iterator over object bounding boxes (rows)
-/// `column_bboxes` - iterator over detection bounding boxes (columns)
-pub fn build_iou_matrix<'a>(
-    object_bboxes: impl Iterator<Item = &'a BBox>,
-    detection_bboxes: impl Iterator<Item = &'a BBox>,
-) -> Vec<Vec<f32>> {
-    let object_bboxes: Vec<_> = object_bboxes.collect();
-    let detection_bboxes: Vec<_> = detection_bboxes.collect();
-
+/// `object_bboxes` - slice of object bounding boxes (rows)
+/// `detection_bboxes` - slice of detection bounding boxes (columns)
+pub fn build_iou_matrix(object_bboxes: &[&BBox], detection_bboxes: &[&BBox]) -> Vec<Vec<f32>> {
     let mut cost_matrix = vec![vec![0.0; detection_bboxes.len()]; object_bboxes.len()];
     for (i, object) in object_bboxes.iter().enumerate() {
         for (j, detection) in detection_bboxes.iter().enumerate() {
-            let iou = object.iou(&detection);
+            let iou = object.iou(detection);
             cost_matrix[i][j] = iou; // IoU
         }
     }

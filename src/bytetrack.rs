@@ -1,15 +1,26 @@
-use std::{collections::HashMap, hash::Hash};
+use std::collections::HashMap;
 
 use crate::{
-    bbox::build_iou_matrix, detection::Detection, matching::MatchingAlgorithm, object::Object,
+    bbox::{build_iou_matrix, BBox},
+    detection::Detection,
+    matching::MatchingAlgorithm,
+    object::Object,
 };
 
-pub struct Bytetrack<T: Eq + Hash> {
-    objects: HashMap<T, Object>,
-    config: BytetrackConfig<T>,
+pub struct Bytetrack<ID>
+where
+    ID: Eq + std::hash::Hash + Clone,
+{
+    objects: HashMap<ID, Object>,
+    config: BytetrackConfig<ID>,
+    /// last used ID
+    last_id: Option<ID>,
 }
 
-pub struct BytetrackConfig<ID: Eq + Hash> {
+pub struct BytetrackConfig<ID>
+where
+    ID: Eq + std::hash::Hash + Clone,
+{
     // Maximum number of frames an object can be missing before it is removed
     max_disappeared: u32,
     /// Maximum distance between two objects to be considered the same
@@ -22,11 +33,9 @@ pub struct BytetrackConfig<ID: Eq + Hash> {
     algorithm: MatchingAlgorithm,
     /// new object ID generator
     generate_id: Box<dyn Fn(Option<&ID>) -> ID>,
-    /// last used ID
-    last_id: Option<ID>,
 }
 
-impl Default for BytetrackConfig<usize> {
+impl Default for BytetrackConfig<u32> {
     fn default() -> Self {
         BytetrackConfig {
             max_disappeared: 5,
@@ -35,35 +44,48 @@ impl Default for BytetrackConfig<usize> {
             low_thresh: 0.3,
             algorithm: MatchingAlgorithm::default(),
             generate_id: Box::new(|last_id| last_id.map_or(0, |id| id + 1)),
-            last_id: None,
         }
     }
 }
 
-impl<ID: Eq + Hash> Bytetrack<ID> {
+impl<ID> Bytetrack<ID>
+where
+    ID: Eq + std::hash::Hash + Clone,
+{
     pub fn new(config: BytetrackConfig<ID>) -> Self {
         Bytetrack {
             objects: HashMap::new(),
             config,
+            last_id: None,
         }
     }
 
-    pub fn track<'a>(&mut self, detections: impl Iterator<Item = &'a Detection> + Clone) -> () {
+    pub fn track<DETECTION>(&mut self, detections: &[DETECTION]) -> ()
+    where
+        DETECTION: AsRef<Detection>,
+    {
         // Predict new locations of existing objects
         let predicted_bboxes: Vec<_> = self.objects.iter_mut().map(|obj| obj.1.predict()).collect();
 
         // Split detections into high and low confidence
+        let detection_refs: Vec<&Detection> = detections.iter().map(|d| d.as_ref()).collect();
         let (high_conf_detections, low_conf_detections) = split_detections(
-            detections.clone(),
+            &detection_refs,
             self.config.high_thresh,
             self.config.low_thresh,
         );
 
         // 2. Match high confidence detections to existing objects
         // 2.1 Build cost matrix (e.g. using IoU)
+        let high_conf_bboxes: Vec<BBox> = high_conf_detections
+            .iter()
+            .map(|(_, d)| d.bbox.clone())
+            .collect();
+        let predicted_bbox_refs: Vec<&BBox> = predicted_bboxes.iter().collect();
+        let high_conf_bbox_refs: Vec<&BBox> = high_conf_bboxes.iter().collect();
         let iou_matrix = build_iou_matrix(
-            predicted_bboxes.iter(),
-            high_conf_detections.iter().map(|(_, d)| &d.bbox),
+            predicted_bbox_refs.as_slice(),
+            high_conf_bbox_refs.as_slice(),
         );
 
         // 2.2 Solve assignment problem (e.g. using Hungarian algorithm)
@@ -78,7 +100,7 @@ impl<ID: Eq + Hash> Bytetrack<ID> {
         let mut found_detections = Vec::<usize>::new(); // contains the index (as in `detections` params ) of found detections
         self.objects
             .iter_mut()
-            .zip(assignments.iter())
+            .zip(assignments.iter()) // asseumes HashMap iteration order matches assignments
             .enumerate()
             // update matched objects and store their indices
             .for_each(
@@ -95,14 +117,18 @@ impl<ID: Eq + Hash> Bytetrack<ID> {
 
         // 4. Match low confidence detections to unmatched objects
         // 4.1 Build cost matrix (e.g. using IoU)
+        let unmatched_predicted_bboxes: Vec<&BBox> = predicted_bboxes
+            .iter()
+            .enumerate()
+            // avoid already matched objects
+            .filter(|(i, _)| !found_objects.contains(i))
+            .map(|(_, b)| b)
+            .collect();
+        let low_conf_bboxes: Vec<&BBox> =
+            low_conf_detections.iter().map(|(_, d)| &d.bbox).collect();
         let iou_matrix = build_iou_matrix(
-            predicted_bboxes
-                .iter()
-                .enumerate()
-                // avaoid already matched objects
-                .filter(|(i, _)| !found_objects.contains(i))
-                .map(|(_, b)| b),
-            low_conf_detections.iter().map(|(_, d)| &d.bbox),
+            unmatched_predicted_bboxes.as_slice(),
+            low_conf_bboxes.as_slice(),
         );
 
         // 4.2 Solve assignment problem (e.g. using Hungarian algorithm)
@@ -130,24 +156,26 @@ impl<ID: Eq + Hash> Bytetrack<ID> {
             });
         found_objects.extend(new_found_objects);
 
-        // 6. Increment disappeared counter for unmatched objects
+        // 5. Increment disappeared counter for unmatched objects
         self.objects
             .iter_mut()
             .enumerate()
             .filter(|(i, _)| !found_objects.contains(i))
             .for_each(|(_i, (_id, object))| object.status.incrment_lost_frames());
 
-        // 7. Remove objects that have disappeared for too long
+        // 6. Remove objects that have disappeared for too long
         self.objects
             .retain(|_id, obj| obj.status.get_lost_frames() <= self.config.max_disappeared);
 
-        // 8. Create new objects for unmatched detections
+        // 7. Create new objects for unmatched detections
         detections
+            .iter()
             .enumerate()
             .filter(|(i, _)| !found_detections.contains(i))
             .for_each(|(_i, detection)| {
-                let new_id = (self.config.generate_id)(self.config.last_id.as_ref());
-                let new_object = Object::from_detection((*detection).clone());
+                let new_id = (self.config.generate_id)(self.last_id.as_ref());
+                let new_object = Object::from_detection(detection.as_ref().clone());
+                self.last_id = Some(new_id.clone());
                 self.objects.insert(new_id, new_object);
             });
     }
@@ -156,24 +184,25 @@ impl<ID: Eq + Hash> Bytetrack<ID> {
 /// Split detections into high and low confidence based on thresholds
 ///
 /// Returns two vectors containing the original index and the detection
-fn split_detections<'a>(
-    detections: impl Iterator<Item = &'a Detection> + Clone,
+fn split_detections(
+    detections: &[&Detection],
     high_thresh: f32,
     low_thresh: f32,
 ) -> (Vec<(usize, Detection)>, Vec<(usize, Detection)>) {
     let high_conf_detections = detections
-        .clone()
+        .iter()
         .enumerate()
         .filter(|(_, detection)| detection.confidence >= high_thresh)
-        .map(|(i, detection)| (i, detection.clone()))
+        .map(|(i, detection)| (i, (*detection).clone()))
         .collect();
 
     let low_conf_detections = detections
+        .iter()
         .enumerate()
         .filter(|(_, detection)| {
             detection.confidence >= low_thresh && detection.confidence < high_thresh
         })
-        .map(|(i, detection)| (i, detection.clone()))
+        .map(|(i, detection)| (i, (*detection).clone()))
         .collect();
 
     (high_conf_detections, low_conf_detections)
@@ -191,7 +220,8 @@ mod tests {
             det!(bbox!(40.0, 40.0, 10.0, 10.0), 0.2),
         ];
 
-        let (high, low) = super::split_detections(detections.iter(), 0.6, 0.3);
+        let detection_refs: Vec<&Detection> = detections.iter().collect();
+        let (high, low) = super::split_detections(&detection_refs, 0.6, 0.3);
 
         assert_eq!(high[0].0, 0);
         assert_eq!(high[0].1.confidence, 0.9);
@@ -210,7 +240,7 @@ mod tests {
 
         let objects = vec![&bbox1, &bbox3];
         let detections = vec![&bbox2, &bbox4];
-        let iou_matrix = super::build_iou_matrix(objects.into_iter(), detections.into_iter());
+        let iou_matrix = super::build_iou_matrix(objects.as_slice(), detections.as_slice());
         assert_eq!(iou_matrix.len(), 2);
         assert_eq!(iou_matrix[0].len(), 2);
 
