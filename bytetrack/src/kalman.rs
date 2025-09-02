@@ -5,7 +5,6 @@
 
 use crate::bbox::BBox;
 use kalman_filters::{KalmanFilter, KalmanFilterBuilder};
-use nalgebra::{SMatrix, SVector};
 
 /// Configuration parameters for the bounding box Kalman filter
 #[derive(Debug, Clone)]
@@ -57,219 +56,68 @@ impl BBoxKalmanFilter {
 
         // State transition matrix for constant velocity model
         // State: [cx, cy, w, h, vx, vy, vw, vh]
-        let f = SMatrix::<f32, 8, 8>::from([
-            [1.0, 0.0, 0.0, 0.0, config.dt, 0.0, 0.0, 0.0], // cx = cx + vx * dt
-            [0.0, 1.0, 0.0, 0.0, 0.0, config.dt, 0.0, 0.0], // cy = cy + vy * dt
-            [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, config.dt, 0.0], // w = w + vw * dt
-            [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, config.dt], // h = h + vh * dt
-            [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],       // vx = vx
-            [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0],       // vy = vy
-            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],       // vw = vw
-            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0],       // vh = vh
-        ]);
+        // Using Vec-based approach like the library examples
+        let f_vec = vec![
+            1.0, 0.0, 0.0, 0.0, config.dt, 0.0, 0.0, 0.0,  // cx = cx + vx * dt
+            0.0, 1.0, 0.0, 0.0, 0.0, config.dt, 0.0, 0.0,  // cy = cy + vy * dt  
+            0.0, 0.0, 1.0, 0.0, 0.0, 0.0, config.dt, 0.0,  // w = w + vw * dt
+            0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, config.dt,  // h = h + vh * dt
+            0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0,        // vx = vx
+            0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0,        // vy = vy
+            0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0,        // vw = vw
+            0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0,        // vh = vh
+        ];
 
         // Initial state: center coordinates, width, height, zero velocities
-        let x0 = SVector::<f32, 8>::from([
+        let x0_vec = vec![
             center.x, center.y, width, height, 0.0, // vx
             0.0, // vy
             0.0, // vw
             0.0, // vh
-        ]);
+        ];
 
         // Initial covariance - higher uncertainty for velocities
-        let p0 = SMatrix::<f32, 8, 8>::from([
-            [
-                config.initial_position_variance,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-            ],
-            [
-                0.0,
-                config.initial_position_variance,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-            ],
-            [
-                0.0,
-                0.0,
-                config.initial_position_variance,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-            ],
-            [
-                0.0,
-                0.0,
-                0.0,
-                config.initial_position_variance,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-            ],
-            [
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                config.initial_velocity_variance,
-                0.0,
-                0.0,
-                0.0,
-            ],
-            [
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                config.initial_velocity_variance,
-                0.0,
-                0.0,
-            ],
-            [
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                config.initial_velocity_variance,
-                0.0,
-            ],
-            [
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                config.initial_velocity_variance,
-            ],
-        ]);
+        let p0_vec = vec![
+            config.initial_position_variance, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, //
+            0.0, config.initial_position_variance, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, //
+            0.0, 0.0, config.initial_position_variance, 0.0, 0.0, 0.0, 0.0, 0.0, //
+            0.0, 0.0, 0.0, config.initial_position_variance, 0.0, 0.0, 0.0, 0.0, //
+            0.0, 0.0, 0.0, 0.0, config.initial_velocity_variance, 0.0, 0.0, 0.0, //
+            0.0, 0.0, 0.0, 0.0, 0.0, config.initial_velocity_variance, 0.0, 0.0, //
+            0.0, 0.0, 0.0, 0.0, 0.0, 0.0, config.initial_velocity_variance, 0.0, //
+            0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, config.initial_velocity_variance, //
+        ];
 
-        // Process noise (uncertainty in acceleration)
+        // Process noise (uncertainty in acceleration) - following the 2D example pattern
         let dt = config.dt;
         let q_val = config.process_noise;
-        let q = SMatrix::<f32, 8, 8>::from([
-            [
-                q_val * dt * dt * dt / 3.0,
-                0.0,
-                0.0,
-                0.0,
-                q_val * dt * dt / 2.0,
-                0.0,
-                0.0,
-                0.0,
-            ],
-            [
-                0.0,
-                q_val * dt * dt * dt / 3.0,
-                0.0,
-                0.0,
-                0.0,
-                q_val * dt * dt / 2.0,
-                0.0,
-                0.0,
-            ],
-            [
-                0.0,
-                0.0,
-                q_val * dt * dt * dt / 3.0,
-                0.0,
-                0.0,
-                0.0,
-                q_val * dt * dt / 2.0,
-                0.0,
-            ],
-            [
-                0.0,
-                0.0,
-                0.0,
-                q_val * dt * dt * dt / 3.0,
-                0.0,
-                0.0,
-                0.0,
-                q_val * dt * dt / 2.0,
-            ],
-            [
-                q_val * dt * dt / 2.0,
-                0.0,
-                0.0,
-                0.0,
-                q_val * dt,
-                0.0,
-                0.0,
-                0.0,
-            ],
-            [
-                0.0,
-                q_val * dt * dt / 2.0,
-                0.0,
-                0.0,
-                0.0,
-                q_val * dt,
-                0.0,
-                0.0,
-            ],
-            [
-                0.0,
-                0.0,
-                q_val * dt * dt / 2.0,
-                0.0,
-                0.0,
-                0.0,
-                q_val * dt,
-                0.0,
-            ],
-            [
-                0.0,
-                0.0,
-                0.0,
-                q_val * dt * dt / 2.0,
-                0.0,
-                0.0,
-                0.0,
-                q_val * dt,
-            ],
-        ]);
+        let q_vec = vec![
+            q_val*dt*dt*dt/3.0, 0.0, 0.0, 0.0, q_val*dt*dt/2.0, 0.0, 0.0, 0.0, //
+            0.0, q_val*dt*dt*dt/3.0, 0.0, 0.0, 0.0, q_val*dt*dt/2.0, 0.0, 0.0, //
+            0.0, 0.0, q_val*dt*dt*dt/3.0, 0.0, 0.0, 0.0, q_val*dt*dt/2.0, 0.0, //
+            0.0, 0.0, 0.0, q_val*dt*dt*dt/3.0, 0.0, 0.0, 0.0, q_val*dt*dt/2.0, //
+            q_val*dt*dt/2.0, 0.0, 0.0, 0.0, q_val*dt, 0.0, 0.0, 0.0, //
+            0.0, q_val*dt*dt/2.0, 0.0, 0.0, 0.0, q_val*dt, 0.0, 0.0, //
+            0.0, 0.0, q_val*dt*dt/2.0, 0.0, 0.0, 0.0, q_val*dt, 0.0, //
+            0.0, 0.0, 0.0, q_val*dt*dt/2.0, 0.0, 0.0, 0.0, q_val*dt, //
+        ];
 
         // Observation matrix (we measure cx, cy, w, h)
-        let h = SMatrix::<f32, 4, 8>::from_row_slice(&[
+        let h_vec = vec![
             1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, // Measure cx
             0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, // Measure cy
             0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, // Measure w
             0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, // Measure h
-        ]);
+        ];
 
         // Measurement noise
         let r_val = config.measurement_noise;
-        let r = SMatrix::<f32, 4, 4>::from([
-            [r_val, 0.0, 0.0, 0.0],
-            [0.0, r_val, 0.0, 0.0],
-            [0.0, 0.0, r_val, 0.0],
-            [0.0, 0.0, 0.0, r_val],
-        ]);
-
-        // Convert SMatrix/SVector to Vec for KalmanFilterBuilder
-        let f_vec: Vec<f32> = f.as_slice().to_vec();
-        let x0_vec: Vec<f32> = x0.as_slice().to_vec();
-        let p0_vec: Vec<f32> = p0.as_slice().to_vec();
-        let q_vec: Vec<f32> = q.as_slice().to_vec();
-        let h_vec: Vec<f32> = h.as_slice().to_vec();
-        let r_vec: Vec<f32> = r.as_slice().to_vec();
+        let r_vec = vec![
+            r_val, 0.0, 0.0, 0.0, //
+            0.0, r_val, 0.0, 0.0, //
+            0.0, 0.0, r_val, 0.0, //
+            0.0, 0.0, 0.0, r_val, //
+        ];
 
         // Build the Kalman filter
         let filter = KalmanFilterBuilder::<f32>::new(8, 4)

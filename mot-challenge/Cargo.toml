@@ -1,0 +1,37 @@
+[package]
+name = "mot-challenge"
+version = "0.1.0"
+edition = "2024"
+
+[[example]]
+name = "mot17_plotting"
+path = "examples/mot17_plotting.rs"
+
+[[example]]
+name = "basic_tracking"
+path = "examples/basic_tracking.rs"
+
+[[example]]
+name = "kalman_debug"
+path = "examples/kalman_debug.rs"
+
+[[example]]
+name = "debug_matrices"
+path = "examples/debug_matrices.rs"
+
+[dependencies]
+anyhow = "1.0.99"
+polars = { version = "0.45.0", features = ["csv"] }
+reqwest = { version = "0.12", features = ["stream"] }
+tokio = { version = "1.0", features = ["full"] }
+zip = "2.2"
+serde = { version = "1.0", features = ["derive"] }
+bytetrack = { path = "../bytetrack" }
+plotters = "0.3"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "mot17_benchmark"
+harness = false
