@@ -95,7 +95,16 @@ where
     ///
     /// # Arguments
     /// * `detections` - Slice of detection references from the current frame
-    pub fn track(&mut self, detections: &[&Detection]) -> () {
+    ///
+    /// # Result
+    /// * New objects will eb added to [`Self::objects`]
+    /// * Updated objects will have their state modified inside [`Self::objects`]
+    /// * The [`BytetrackTrackResult`] bill be returned
+    ///   * The [`BytetrackTrackResult::new`] field contains IDs of newly created objects
+    ///   * The [`BytetrackTrackResult::updated`] field contains IDs of updated objects
+    ///   * The [`BytetrackTrackResult::removed`] field contains the removed objects
+    ///
+    pub fn track(&mut self, detections: &[&Detection]) -> BytetrackTrackResult<ID> {
         // Increment frame counter
         self.last_frame_index += 1;
         // Predict new locations of existing objects
@@ -128,6 +137,7 @@ where
         // 2.3 Update matched objects with new detections
         let mut found_objects = Vec::new();
         let mut found_detections = Vec::<usize>::new(); // contains the index (as in `detections` params ) of found detections
+        let mut found_detections_object_ids = Vec::<ID>::new(); // contains the object IDs of found detections (same order as found_detections)
         self.objects
             .iter_mut()
             .zip(assignments.iter()) // asseumes HashMap iteration order matches assignments
@@ -143,6 +153,7 @@ where
                             .expect("Update failed");
                         found_objects.push(object_i);
                         found_detections.push(*detection_i);
+                        found_detections_object_ids.push(object.id.clone());
                     }
                 },
             );
@@ -186,6 +197,7 @@ where
                         .expect("Update failed");
                     new_found_objects.push(object_i);
                     found_detections.push(*detection_i);
+                    found_detections_object_ids.push(object.id.clone());
                 }
             });
         found_objects.extend(new_found_objects);
@@ -198,10 +210,19 @@ where
             .for_each(|(_i, (_id, object))| object.status.incrment_lost_frames());
 
         // 6. Remove objects that have disappeared for too long
-        self.objects
-            .retain(|_id, obj| obj.status.get_lost_frames() <= self.config.max_disappeared);
+        let mut removed_objects = Vec::new();
+        self.objects.retain(|_id, obj| {
+            match obj.status.get_lost_frames() <= self.config.max_disappeared {
+                true => true,
+                false => {
+                    removed_objects.push(obj.clone());
+                    false
+                }
+            }
+        });
 
         // 7. Create new objects for unmatched detections
+        let mut new_objects: Vec<(usize, ID)> = Vec::new();
         detections
             .iter()
             .enumerate()
@@ -215,8 +236,20 @@ where
                     self.last_frame_index,
                 );
                 self.last_id = Some(new_id.clone());
-                self.objects.insert(new_id, new_object);
+                self.objects.insert(new_id.clone(), new_object);
+                new_objects.push((detection_index, new_id));
             });
+
+        // 8. Prepare result
+        BytetrackTrackResult {
+            new_objects,
+            updated_objects: found_detections
+                .iter()
+                .zip(found_detections_object_ids.iter())
+                .map(|(detection_index, object_id)| (*detection_index, object_id.clone()))
+                .collect(),
+            removed_objects,
+        }
     }
 
     /// Get a reference to all currently tracked objects
@@ -237,6 +270,39 @@ where
     pub fn get_object_bbox(&self, object_id: &ID) -> Option<BBox> {
         self.objects.get(object_id).map(|obj| obj.current_bbox())
     }
+}
+
+/// Result of a ByteTrack tracking update operation.
+///
+/// This structure contains the outcomes of processing detections through the ByteTrack algorithm,
+/// categorizing objects into three groups based on their tracking state changes.
+///
+/// # Fields
+///
+/// * `new_objects` - Newly detected objects that have been assigned tracking IDs for the first time.
+///   Each tuple contains the detection index from the input array and the newly assigned object ID.
+///
+/// * `updated_objects` - Previously tracked objects that have been matched with new detections.
+///   Each tuple contains the detection index from the input array and the existing object ID.
+///
+/// * `removed_objects` - Objects that were previously tracked but are no longer detected or have
+///   been determined to be lost. Contains the complete Object instances that were removed.
+pub struct BytetrackTrackResult<ID>
+where
+    ID: Eq + std::hash::Hash + Clone,
+{
+    /// New objects
+    /// * 0: index of the detection in the input detections array
+    /// * 1: the created Object Id
+    pub new_objects: Vec<(usize, ID)>,
+
+    /// Updated objects
+    /// * 0: index of the detection in the input detections array
+    /// * 1: the Object Id
+    pub updated_objects: Vec<(usize, ID)>,
+
+    /// Removed objects
+    pub removed_objects: Vec<Object<ID>>,
 }
 
 /// Split detections into high and low confidence based on thresholds
