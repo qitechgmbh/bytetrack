@@ -50,26 +50,44 @@ impl BBox {
 
     /// Get the width of the bounding box
     #[inline]
-    fn width(&self) -> f32 {
+    pub fn width(&self) -> f32 {
         self.translation.vector.x.clone()
     }
 
     /// Get the height of the bounding box
     #[inline]
-    fn height(&self) -> f32 {
+    pub fn height(&self) -> f32 {
         self.translation.vector.y.clone()
+    }
+
+    /// Get the x-coordinate of the left edge (same as origin.x)
+    #[inline]
+    pub fn left(&self) -> f32 {
+        self.origin.x.clone()
+    }
+
+    /// Get the y-coordinate of the top edge (same as origin.y)
+    #[inline]
+    pub fn top(&self) -> f32 {
+        self.origin.y.clone()
     }
 
     /// Get the x-coordinate of the right edge
     #[inline]
-    fn right(&self) -> f32 {
+    pub fn right(&self) -> f32 {
         self.origin.x.clone() + self.width()
     }
 
     /// Get the y-coordinate of the bottom edge
     #[inline]
-    fn bottom(&self) -> f32 {
+    pub fn bottom(&self) -> f32 {
         self.origin.y.clone() + self.height()
+    }
+
+    /// Get the area of the bounding box
+    #[inline]
+    pub fn area(&self) -> f32 {
+        self.width() * self.height()
     }
 
     /// Calculate Intersection over Union (IoU) with another bounding box
@@ -120,17 +138,6 @@ impl BBox {
             self.origin.x.clone() + self.width() / 2.0,
             self.origin.y.clone() + self.height() / 2.0,
         )
-    }
-
-    /// Calculate the diagonal length of the bounding box
-    ///
-    /// This can be useful for normalization or distance calculations.
-    ///
-    /// # Returns
-    /// Length of the diagonal from top-left to bottom-right
-    #[inline]
-    pub fn diagonal(&self) -> f32 {
-        self.translation.vector.norm()
     }
 }
 
