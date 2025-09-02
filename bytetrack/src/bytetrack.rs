@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    bbox::{build_iou_matrix, BBox},
+    bbox::{BBox, build_iou_matrix},
     detection::Detection,
     matching::MatchingAlgorithm,
     object::Object,
@@ -24,11 +24,13 @@ where
     ID: Eq + std::hash::Hash + Clone,
 {
     /// Map of tracked objects indexed by their unique IDs
-    objects: HashMap<ID, Object>,
+    objects: HashMap<ID, Object<ID>>,
     /// Configuration parameters for the tracker
     config: BytetrackConfig<ID>,
     /// Last used ID for generating new object IDs
     last_id: Option<ID>,
+    /// Current frame index
+    last_frame_index: usize,
 }
 
 /// Configuration parameters for ByteTrack
@@ -82,6 +84,7 @@ where
             objects: HashMap::new(),
             config,
             last_id: None,
+            last_frame_index: 0,
         }
     }
 
@@ -92,17 +95,15 @@ where
     ///
     /// # Arguments
     /// * `detections` - Slice of detection references from the current frame
-    pub fn track(&mut self, detections: &[&Detection]) -> ()
-    {
+    pub fn track(&mut self, detections: &[&Detection]) -> () {
+        // Increment frame counter
+        self.last_frame_index += 1;
         // Predict new locations of existing objects
         let predicted_bboxes: Vec<_> = self.objects.iter_mut().map(|obj| obj.1.predict()).collect();
 
         // Split detections into high and low confidence
-        let (high_conf_detections, low_conf_detections) = split_detections(
-            detections,
-            self.config.high_thresh,
-            self.config.low_thresh,
-        );
+        let (high_conf_detections, low_conf_detections) =
+            split_detections(detections, self.config.high_thresh, self.config.low_thresh);
 
         // 2. Match high confidence detections to existing objects
         // 2.1 Build cost matrix (e.g. using IoU)
@@ -137,7 +138,9 @@ where
                     if let Some(high_conf_detection_i) = high_conf_detection_i {
                         let (detection_i, detection) =
                             &high_conf_detections[*high_conf_detection_i];
-                        object.update(detection.clone()).expect("Update failed");
+                        object
+                            .update(detection, *detection_i, self.last_frame_index)
+                            .expect("Update failed");
                         found_objects.push(object_i);
                         found_detections.push(*detection_i);
                     }
@@ -178,7 +181,9 @@ where
             .for_each(|((object_i, (_object_id, object)), low_conf_detection_i)| {
                 if let Some(low_conf_detection_i) = low_conf_detection_i {
                     let (detection_i, detection) = &low_conf_detections[*low_conf_detection_i];
-                    object.update(detection.clone()).expect("Update failed");
+                    object
+                        .update(detection, *detection_i, self.last_frame_index)
+                        .expect("Update failed");
                     new_found_objects.push(object_i);
                     found_detections.push(*detection_i);
                 }
@@ -201,9 +206,14 @@ where
             .iter()
             .enumerate()
             .filter(|(i, _)| !found_detections.contains(i))
-            .for_each(|(_i, detection)| {
+            .for_each(|(detection_index, detection)| {
                 let new_id = (self.config.generate_id)(self.last_id.as_ref());
-                let new_object = Object::from_detection((*detection).clone());
+                let new_object = Object::from_detection(
+                    new_id.clone(),
+                    detection,
+                    detection_index,
+                    self.last_frame_index,
+                );
                 self.last_id = Some(new_id.clone());
                 self.objects.insert(new_id, new_object);
             });
@@ -213,7 +223,7 @@ where
     ///
     /// Returns an iterator over (object_id, object) pairs for all
     /// objects currently being tracked.
-    pub fn objects(&self) -> impl Iterator<Item = (&ID, &Object)> {
+    pub fn objects(&self) -> impl Iterator<Item = (&ID, &Object<ID>)> {
         self.objects.iter()
     }
 
@@ -224,8 +234,8 @@ where
     ///
     /// # Returns
     /// Option containing the object's current bounding box if found
-    pub fn get_object_bbox(&self, object_id: &ID) -> Option<&BBox> {
-        self.objects.get(object_id).map(|obj| &obj.bbox)
+    pub fn get_object_bbox(&self, object_id: &ID) -> Option<BBox> {
+        self.objects.get(object_id).map(|obj| obj.current_bbox())
     }
 }
 

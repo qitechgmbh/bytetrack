@@ -1,99 +1,80 @@
-use nalgebra::Point2;
+use std::hash::Hash;
 
 use crate::{
+    ObjectStatus, TrackedDetection,
     bbox::BBox,
     detection::Detection,
     kalman::{BBoxKalmanConfig, BBoxKalmanFilter},
 };
-
-/// Status of a tracked object
-///
-/// Objects can be either actively tracked (when recently matched to detections)
-/// or temporarily lost (when no matching detection was found for some frames).
-#[derive(Clone, Debug)]
-pub enum ObjectStatus {
-    /// Object is actively being tracked
-    Tracked,
-    /// Object is temporarily lost for the specified number of frames
-    Lost { frames: u32 },
-}
-
-impl ObjectStatus {
-    /// Increment the number of lost frames or transition from Tracked to Lost
-    pub fn incrment_lost_frames(&mut self) {
-        match self {
-            ObjectStatus::Tracked => {
-                *self = ObjectStatus::Lost { frames: 1 };
-            }
-            ObjectStatus::Lost { frames } => {
-                *frames += 1;
-            }
-        }
-    }
-
-    /// Get the number of frames this object has been lost
-    ///
-    /// Returns 0 if the object is currently tracked.
-    pub fn get_lost_frames(&self) -> u32 {
-        match self {
-            ObjectStatus::Tracked => 0,
-            ObjectStatus::Lost { frames } => *frames,
-        }
-    }
-
-    /// Set status to Tracked
-    pub fn set_tracked(&mut self) {
-        *self = ObjectStatus::Tracked;
-    }
-}
 
 /// A tracked object with Kalman filter-based prediction
 ///
 /// This represents an object being tracked across multiple frames. It maintains
 /// the latest detection information, predicted bounding box from Kalman filtering,
 /// tracking status, and optional point features.
-pub struct Object {
-    /// Detection that was last given to the tracker via `Bytetrack::track`
-    pub detection: Detection,
-    /// Index of the last detection when given to the `Bytetrack::track` method
-    pub detection_index: Option<usize>,
-    /// Bounding box updated by Kalman filter
-    pub bbox: BBox,
+pub struct Object<ID>
+where
+    ID: Hash + Eq + Clone,
+{
+    pub id: ID,
     /// Tracked points (for future feature tracking extensions)
-    pub points: Vec<Point2<f32>>,
+    ///
+    /// Always contains at least one entry (the initial detection)
+    pub track: Vec<TrackedDetection>,
     /// Status of the track (Tracked or Lost with frame count)
     pub status: ObjectStatus,
     /// Kalman filter for predicting bbox position and size
     kalman_filter: BBoxKalmanFilter,
 }
 
-impl Clone for Object {
+impl<ID> Clone for Object<ID>
+where
+    ID: Hash + Eq + Clone,
+{
     fn clone(&self) -> Self {
-        // We'll recreate the Kalman filter when cloning
-        let mut cloned = Object::from_detection(self.detection.clone());
-        cloned.detection_index = self.detection_index;
-        cloned.bbox = self.bbox.clone();
-        cloned.points = self.points.clone();
-        cloned.status = self.status.clone();
-        cloned
+        // Recreate the Kalman filter since it doesn't implement Clone
+        let kalman_filter = if let Some(latest_detection) = self.track.last() {
+            let config = BBoxKalmanConfig::default();
+            BBoxKalmanFilter::new(&latest_detection.detection.bbox, config).unwrap()
+        } else {
+            unreachable!("Object must have at least one tracked detection to clone")
+        };
+
+        Self {
+            id: self.id.clone(),
+            track: self.track.clone(),
+            status: self.status.clone(),
+            kalman_filter,
+        }
     }
 }
 
-impl Object {
+impl<ID> Object<ID>
+where
+    ID: Hash + Eq + Clone,
+{
     /// Create a new Object from a detection with default Kalman filter configuration
     ///
     /// # Arguments
+    /// * `id` - Unique identifier for this object
     /// * `detection` - Initial detection to create the object from
-    pub fn from_detection(detection: Detection) -> Self {
+    /// * `detection_index` - Index of the detection in the detections array
+    /// * `frame_index` - Current frame index
+    pub fn from_detection(
+        id: ID,
+        detection: &Detection,
+        detection_index: usize,
+        frame_index: usize,
+    ) -> Self {
         // Create Kalman filter with default configuration
         let config = BBoxKalmanConfig::default();
         let kalman_filter = BBoxKalmanFilter::new(&detection.bbox, config).unwrap();
 
+        let tracked_detection = TrackedDetection::new(detection, detection_index, frame_index);
+
         Self {
-            bbox: detection.bbox.clone(),
-            detection,
-            detection_index: None,
-            points: Vec::new(),
+            id,
+            track: vec![tracked_detection],
             status: ObjectStatus::Tracked,
             kalman_filter,
         }
@@ -102,17 +83,26 @@ impl Object {
     /// Create a new Object with custom Kalman filter configuration
     ///
     /// # Arguments
+    /// * `id` - Unique identifier for this object
     /// * `detection` - Initial detection to create the object from
+    /// * `detection_index` - Index of the detection in the detections array
+    /// * `frame_index` - Current frame index
     /// * `config` - Custom Kalman filter configuration
-    pub fn new_with_config(detection: Detection, config: BBoxKalmanConfig) -> Self {
+    pub fn new_with_config(
+        id: ID,
+        detection: &Detection,
+        detection_index: usize,
+        frame_index: usize,
+        config: BBoxKalmanConfig,
+    ) -> Self {
         // Create Kalman filter with custom configuration
         let kalman_filter = BBoxKalmanFilter::new(&detection.bbox, config).unwrap();
 
+        let tracked_detection = TrackedDetection::new(detection, detection_index, frame_index);
+
         Self {
-            bbox: detection.bbox.clone(),
-            detection,
-            detection_index: None,
-            points: Vec::new(),
+            id,
+            track: vec![tracked_detection],
             status: ObjectStatus::Tracked,
             kalman_filter,
         }
@@ -128,31 +118,64 @@ impl Object {
     pub fn predict(&mut self) -> BBox {
         // Perform Kalman filter prediction and get predicted bbox
         let predicted_bbox = self.kalman_filter.predict();
-        self.bbox = predicted_bbox.clone();
+
+        // Update the latest tracked detection's bbox with the prediction
+        if let Some(last_detection) = self.track.last_mut() {
+            last_detection.bbox = predicted_bbox.clone();
+        }
+
         predicted_bbox
     }
 
     /// Update the object with a new matching detection
     ///
-    /// This updates the Kalman filter with the new detection and resets
+    /// This updates the Kalman filter with the new detection and adds
+    /// a new tracked detection to the track history. Also resets
     /// the object status to Tracked.
     ///
     /// # Arguments
     /// * `detection` - New detection that matches this object
+    /// * `detection_index` - Index of the detection in the detections array
+    /// * `frame_index` - Current frame index
     ///
     /// # Returns
     /// Result indicating success or Kalman filter error
-    pub fn update(&mut self, detection: Detection) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn update(
+        &mut self,
+        detection: &Detection,
+        detection_index: usize,
+        frame_index: usize,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // Update Kalman filter with new detection
         self.kalman_filter.update(&detection.bbox)?;
 
-        // Update stored detection and bbox from filter state
-        self.detection = detection;
-        self.bbox = self.kalman_filter.current_bbox();
+        // Add new tracked detection to the track history
+        let tracked_detection = TrackedDetection::new(detection, detection_index, frame_index);
+        self.track.push(tracked_detection);
 
-        // update status
+        // Update status to tracked
         self.status.set_tracked();
 
         Ok(())
+    }
+
+    /// Get the current bounding box (from the latest tracked detection or Kalman filter)
+    pub fn current_bbox(&self) -> BBox {
+        if let Some(last_detection) = self.track.last() {
+            last_detection.bbox.clone()
+        } else {
+            // Fallback to Kalman filter's current state
+            self.kalman_filter.current_bbox()
+        }
+    }
+
+    /// Get the latest detection
+    pub fn latest_detection(&self) -> Option<&Detection> {
+        self.track.last().map(|td| &td.detection)
+    }
+
+    /// Get the latest detection index
+    pub fn latest_detection_index(&self) -> Option<usize> {
+        self.track.last().map(|td| td.detection_index)
     }
 }
