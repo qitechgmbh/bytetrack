@@ -8,10 +8,3 @@ readme = "README.md"
 nalgebra = "0.34"
 pathfinding = "4.14.0"
 kalman_filters = { version = "1.0.0", features = ["nalgebra"] }
-
-[dev-dependencies]
-anyhow = "1.0.99"
-polars = "0.50.0"
-reqwest = "0.12.23"
-tokio = "1.47.1"
-zip = "4.6.0"
