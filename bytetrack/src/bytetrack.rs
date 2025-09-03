@@ -8,32 +8,6 @@ use crate::{
     object::Object,
 };
 
-/// Main ByteTrack tracker implementation
-///
-/// ByteTrack is a multi-object tracking algorithm that associates detections with
-/// existing tracks using a two-stage approach:
-/// 1. High-confidence detections are matched to existing tracks using IoU
-/// 2. Low-confidence detections are used to recover potentially lost tracks
-///
-/// The tracker maintains objects with unique IDs and uses Kalman filtering
-/// for motion prediction between frames.
-///
-/// # Type Parameters
-/// * `ID` - Type used for unique object identifiers (must be hashable and cloneable)
-pub struct Bytetrack<ID>
-where
-    ID: Eq + std::hash::Hash + Clone,
-{
-    /// Map of tracked objects indexed by their unique IDs
-    objects: HashMap<ID, Object<ID>>,
-    /// Configuration parameters for the tracker
-    config: BytetrackConfig<ID>,
-    /// Last used ID for generating new object IDs
-    last_id: Option<ID>,
-    /// Current frame index
-    last_frame_index: usize,
-}
-
 /// Configuration parameters for ByteTrack
 ///
 /// This struct contains all the tunable parameters that control the behavior
@@ -70,6 +44,38 @@ impl Default for BytetrackConfig<u32> {
             algorithm: MatchingAlgorithm::default(),
             generate_id: Arc::new(|last_id| last_id.map_or(0, |id| id + 1)),
         }
+    }
+}
+
+/// Main ByteTrack tracker implementation
+///
+/// ByteTrack is a multi-object tracking algorithm that associates detections with
+/// existing tracks using a two-stage approach:
+/// 1. High-confidence detections are matched to existing tracks using IoU
+/// 2. Low-confidence detections are used to recover potentially lost tracks
+///
+/// The tracker maintains objects with unique IDs and uses Kalman filtering
+/// for motion prediction between frames.
+///
+/// # Type Parameters
+/// * `ID` - Type used for unique object identifiers (must be hashable and cloneable)
+pub struct Bytetrack<ID>
+where
+    ID: Eq + std::hash::Hash + Clone,
+{
+    /// Map of tracked objects indexed by their unique IDs
+    objects: HashMap<ID, Object<ID>>,
+    /// Configuration parameters for the tracker
+    config: BytetrackConfig<ID>,
+    /// Last used ID for generating new object IDs
+    last_id: Option<ID>,
+    /// Current frame index
+    last_frame_index: usize,
+}
+
+impl Default for Bytetrack<u32> {
+    fn default() -> Self {
+        Bytetrack::new(BytetrackConfig::<u32>::default())
     }
 }
 
