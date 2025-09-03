@@ -1287,6 +1287,11 @@ pub struct Object<ID> {
   ```
   Get the [TrackedDetection] where the detection was last seen
 
+- ```rust
+  pub fn before_last_tracked_detection(self: &Self) -> Option<&TrackedDetection> { /* ... */ }
+  ```
+  Get before last [TrackedDetection] (at index index -2)
+
 ###### Trait Implementations
 
 - **Any**

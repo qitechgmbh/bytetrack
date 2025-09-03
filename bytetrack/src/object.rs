@@ -200,4 +200,12 @@ where
             .find(|td| td.detection.is_some())
             .expect("Object must have at least one detection that is Some")
     }
+
+    /// Get before last [TrackedDetection] (at index index -2)
+    pub fn before_last_tracked_detection(&self) -> Option<&TrackedDetection> {
+        if self.track.len() < 2 {
+            return None;
+        }
+        self.track.get(self.track.len() - 2)
+    }
 }

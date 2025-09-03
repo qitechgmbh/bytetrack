@@ -131,9 +131,9 @@ where
     /// * New objects will eb added to [`Self::objects`]
     /// * Updated objects will have their state modified inside [`Self::objects`]
     /// * The [`BytetrackTrackResult`] will be returned
-    ///   * The [`BytetrackTrackResult::new`] field contains IDs of newly created objects
-    ///   * The [`BytetrackTrackResult::updated`] field contains IDs of updated objects
-    ///   * The [`BytetrackTrackResult::removed`] field contains the removed objects
+    ///   * The [`BytetrackTrackResult::new_objects`] field contains IDs of newly created objects
+    ///   * The [`BytetrackTrackResult::updated_objects`] field contains IDs of updated objects
+    ///   * The [`BytetrackTrackResult::removed_objects`] field contains the removed objects
     ///
     pub fn track(&mut self, detections: &[&Detection]) -> BytetrackTrackResult<ID> {
         // Increment frame counter
