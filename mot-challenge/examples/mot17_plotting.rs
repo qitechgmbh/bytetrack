@@ -54,7 +54,7 @@ fn main() -> Result<()> {
         let result = tracker.track(&detection_refs);
 
         // Store trajectory points for all active objects
-        for (object_id, object) in tracker.objects() {
+        for (object_id, object) in tracker.iter_objects() {
             let bbox = object.current_bbox();
             let center_x = bbox.left() + bbox.width() / 2.0;
             let center_y = bbox.top() + bbox.height() / 2.0;

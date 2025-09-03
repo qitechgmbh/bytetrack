@@ -286,7 +286,7 @@ where
     ///
     /// Returns an iterator over (object_id, object) pairs for all
     /// objects currently being tracked.
-    pub fn objects(&self) -> impl Iterator<Item = (&ID, &Object<ID>)> {
+    pub fn iter_objects(&self) -> impl Iterator<Item = (&ID, &Object<ID>)> {
         self.objects.iter()
     }
 
