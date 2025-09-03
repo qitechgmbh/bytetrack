@@ -35,7 +35,7 @@ where
         // Recreate the Kalman filter since it doesn't implement Clone
         let kalman_filter = if let Some(latest_detection) = self.track.last() {
             let config = BBoxKalmanConfig::default();
-            BBoxKalmanFilter::new(&latest_detection.bbox, config).unwrap()
+            BBoxKalmanFilter::new(&latest_detection.kalman_bbox, config).unwrap()
         } else {
             unreachable!("Object must have at least one tracked detection to clone")
         };
@@ -120,21 +120,11 @@ where
 
     /// Predict the next bounding box position using Kalman filter
     ///
-    /// This should be called once per frame to get the predicted location
-    /// of the object before attempting to match it with new detections.
-    ///
     /// # Returns
     /// Predicted bounding box for the next frame
     pub fn predict(&mut self) -> BBox {
         // Perform Kalman filter prediction and get predicted bbox
-        let predicted_bbox = self.kalman_filter.predict();
-
-        // Update the latest tracked detection's bbox with the prediction
-        if let Some(last_detection) = self.track.last_mut() {
-            last_detection.bbox = predicted_bbox.clone();
-        }
-
-        predicted_bbox
+        self.kalman_filter.predict()
     }
 
     /// Update the object with a new matching detection
@@ -163,7 +153,7 @@ where
         let tracked_detection = TrackedDetection::new(
             Some(detection),
             Some(detection_index),
-            detection.bbox.clone(),
+            self.kalman_filter.current_bbox(),
             frame_index,
         );
         self.track.push(tracked_detection);
@@ -176,12 +166,7 @@ where
 
     /// Get the current bounding box (from the latest tracked detection or Kalman filter)
     pub fn current_bbox(&self) -> BBox {
-        if let Some(last_detection) = self.track.last() {
-            last_detection.bbox.clone()
-        } else {
-            // Fallback to Kalman filter's current state
-            self.kalman_filter.current_bbox()
-        }
+        self.last_tracked_detection().kalman_bbox.clone()
     }
 
     /// Get the latest [TrackedDetection]

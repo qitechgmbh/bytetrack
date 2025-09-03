@@ -7,7 +7,7 @@ pub struct TrackedDetection {
     // The index of the detection in the detections array passed to the [`Bytetrack::track`] method
     pub detection_index: Option<usize>,
     // Kalman predicted bounding box in the frame
-    pub bbox: BBox,
+    pub kalman_bbox: BBox,
     // Frame index
     pub frame_index: usize,
 }
@@ -16,13 +16,13 @@ impl TrackedDetection {
     pub fn new(
         detection: Option<&Detection>,
         detection_index: Option<usize>,
-        bbox: BBox,
+        kalman_bbox: BBox,
         frame_index: usize,
     ) -> Self {
         Self {
             detection: detection.map(|x| x.clone()),
             detection_index,
-            bbox,
+            kalman_bbox,
             frame_index,
         }
     }
