@@ -284,6 +284,7 @@ dependencies = [
  "kalman_filters",
  "nalgebra",
  "pathfinding",
+ "uuid",
 ]
 
 [[package]]

@@ -47,6 +47,22 @@ impl Default for BytetrackConfig<u32> {
     }
 }
 
+#[cfg(feature = "uuid")]
+impl Default for BytetrackConfig<uuid::Uuid> {
+    fn default() -> Self {
+        use uuid::Uuid;
+
+        BytetrackConfig {
+            max_disappeared: 5,
+            min_iou: 0.3,
+            high_thresh: 0.6,
+            low_thresh: 0.3,
+            algorithm: MatchingAlgorithm::default(),
+            generate_id: Arc::new(|_| Uuid::new_v4()),
+        }
+    }
+}
+
 /// Main ByteTrack tracker implementation
 ///
 /// ByteTrack is a multi-object tracking algorithm that associates detections with
@@ -76,6 +92,13 @@ where
 impl Default for Bytetrack<u32> {
     fn default() -> Self {
         Bytetrack::new(BytetrackConfig::<u32>::default())
+    }
+}
+
+#[cfg(feature = "uuid")]
+impl Default for Bytetrack<uuid::Uuid> {
+    fn default() -> Self {
+        Bytetrack::new(BytetrackConfig::<uuid::Uuid>::default())
     }
 }
 
